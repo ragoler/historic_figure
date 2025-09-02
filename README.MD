@@ -1,53 +1,94 @@
-Historical Figure Matcher
-This web application uses the Gemini API to guess a historical figure based on a phrase provided by the user.
+# 🏛️ Historical Figure Guesser
 
-Project Structure
-main.py: The FastAPI backend server.
+A simple web application that uses the Google Gemini API to guess a historical figure based on a phrase you have in mind.
 
-index.html: The main frontend file.
+## ✨ Features
 
-script.js: Contains the JavaScript logic for the frontend.
+- **AI-Powered Guesses:** Enter a famous quote or phrase, and the AI will identify the historical figure associated with it.
+- **Image Display:** Shows a picture of the guessed figure.
+- **Interactive Feedback:** Lets you mark the AI's guess as correct or incorrect, allowing the AI to try again with new information.
+- **Sleek, Modern UI:** A clean and responsive user interface for a smooth experience.
 
-config.py: Configuration file to store the Gemini API key. (You must create this file)
+## 🛠️ Tech Stack
 
-requirements.txt: A list of Python dependencies for the project.
+- **Backend:** Python, FastAPI
+- **Frontend:** HTML, Tailwind CSS, JavaScript
+- **AI:** Google Gemini API
+- **Image Search:** Google Search scraping with `requests` and `BeautifulSoup`
 
-.gitignore: Specifies files to be ignored by Git.
+## 🚀 Getting Started
 
-Setup & Installation
-1. Clone the Repository
-Clone this project to your local machine.
+Follow these instructions to get the project set up and running on your local machine.
 
-2. Create the Configuration File
-Create a file named config.py in the root directory of the project and add your Gemini API key to it like so:
+### Prerequisites
 
-# config.py
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+- Python 3.8+
+- An active Google Gemini API key.
 
-Note: The config.py file is included in the .gitignore file, so your API key will not be committed to Git.
+### Installation & Setup
 
-3. Install Dependencies
-Install the required Python packages using pip:
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd historic_figure
+    ```
 
-pip install -r requirements.txt
+2.  **Create and activate a virtual environment:**
+    This keeps your project dependencies isolated.
 
-4. Run the Backend Server
-Start the FastAPI server with uvicorn:
+    ```bash
+    # For macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
 
-uvicorn main:app --reload
+    # For Windows
+    python -m venv venv
+    .\venv\Scripts\activate
+    ```
 
-The backend will be running at http://127.0.0.1:8000.
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-5. Open the Frontend
-Open the index.html file in your web browser to use the application.
+4.  **Configure your API Key:**
+    Create a new file named `config.py` in the root of the project and add your Gemini API key as follows:
 
-How to Play
-Enter a phrase that describes or is famously associated with a historical figure (e.g., "I have a dream").
+    ```python
+    # config.py
+    GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+    ```
+    *Note: The `config.py` file is listed in `.gitignore`, so your API key will not be tracked by version control.*
 
-Click the "Find Figure" button.
+## 🏃‍♀️ Running the Application
 
-The application will suggest a historical figure.
+1.  **Start the backend server:**
+    ```bash
+    uvicorn main:app --reload
+    ```
+    The server will be running at `http://127.0.0.1:8000`.
 
-If the suggestion is correct, click "Correct!". A new game will start.
+2.  **Open the application:**
+    Navigate to `http://127.0.0.1:8000` in your web browser. The `index.html` file is served automatically as the main page.
 
-If the suggestion is incorrect, click "Incorrect". The application will try to find a different figure, avoiding the ones it already guessed.
+## 🕹️ How to Use
+
+1.  Enter a phrase in the input box (e.g., "I have a dream").
+2.  Click the **Find Figure** button.
+3.  The application will display its guess.
+4.  If the guess is right, click **Correct!** to reset for a new game.
+5.  If the guess is wrong, click **Incorrect**, and the AI will try to find a different person.
+
+## 🔗 API Endpoints
+
+The backend provides the following endpoints:
+
+- `POST /find_person`:
+  - **Description:** Takes a phrase and a list of previous incorrect guesses, and returns a potential historical figure.
+  - **Request Body:** `{"phrase": "string", "previous_guesses": ["string"]}`
+  - **Response:** `{"name": "string", "reason": "string", "image_query": "string"}`
+
+- `GET /get_image`:
+  - **Description:** Takes a search query and returns a direct URL to a relevant image.
+  - **Query Parameter:** `?query=string`
+  - **Response:** `{"image_url": "string"}`
