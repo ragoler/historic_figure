@@ -45,11 +45,43 @@
                 <div id="loader" class="w-12 h-12 rounded-full border-4 border-gray-300 dark:border-gray-600 hidden"></div>
 
                 <!-- Person Info -->
-                <div id="personInfo" class="hidden">
+                <div id="personInfo" class="hidden w-full">
                     <img id="personImage" src="" alt="Photo of the historical figure" class="w-32 h-32 rounded-full mx-auto mb-4 object-cover">
                     <p class="text-lg text-gray-600 dark:text-gray-400">Is it...</p>
                     <h2 id="personName" class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2"></h2>
                     <p id="personReason" class="mt-3 max-w-md mx-auto text-gray-700 dark:text-gray-300"></p>
+
+                    <!-- Family Info -->
+                    <div id="familyInfo" class="mt-6 text-left w-full max-w-md mx-auto">
+                        <div id="parentsSection" class="hidden">
+                            <h4 class="font-semibold">Parents</h4>
+                            <p id="parentsList" class="text-gray-600 dark:text-gray-400"></p>
+                        </div>
+                        <div id="spouseSection" class="mt-2 hidden">
+                            <h4 class="font-semibold">Spouse</h4>
+                            <p id="spouseList" class="text-gray-600 dark:text-gray-400"></p>
+                        </div>
+                        <div id="childrenSection" class="mt-2 hidden">
+                            <h4 class="font-semibold">Children</h4>
+                            <p id="childrenList" class="text-gray-600 dark:text-gray-400"></p>
+                        </div>
+                    </div>
+
+                    <!-- Location and Map Info -->
+                    <div id="locationInfo" class="mt-6 text-left w-full max-w-md mx-auto hidden">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <h4 class="font-semibold">Birth Place</h4>
+                                <p id="birthPlace" class="text-gray-600 dark:text-gray-400"></p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold">Death Place</h4>
+                                <p id="deathPlace" class="text-gray-600 dark:text-gray-400"></p>
+                            </div>
+                        </div>
+                        <div id="map" class="w-full h-64 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                    </div>
+
                     <div id="feedback" class="mt-6 space-x-4">
                         <button id="correctBtn" class="feedback-button bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-green-600">
                             Correct!

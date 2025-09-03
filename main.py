@@ -10,13 +10,15 @@ from fastapi.responses import FileResponse
 from googlesearch import search
 import requests
 from bs4 import BeautifulSoup
+from maps import get_coordinates
 
 
-# Try to import the API key from the config file
+# Try to import API keys from the config file
 try:
-    from config import GEMINI_API_KEY
+    from config import GEMINI_API_KEY, GOOGLE_MAPS_API_KEY
 except ImportError:
     GEMINI_API_KEY = None
+    GOOGLE_MAPS_API_KEY = None
 
 # Configure the Gemini API
 if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
@@ -41,22 +43,34 @@ app.add_middleware(
 )
 
 # --- API Endpoints ---
+@app.get("/get_maps_key")
+async def get_maps_key():
+    if not GOOGLE_MAPS_API_KEY or GOOGLE_MAPS_API_KEY == "YOUR_GOOGLE_MAPS_API_KEY":
+        raise HTTPException(status_code=500, detail="Google Maps API key not configured on the server.")
+    return {"maps_key": GOOGLE_MAPS_API_KEY}
+
 @app.post("/find_person")
 async def find_person(request: PhraseRequest):
     """
-    This endpoint takes a user's phrase and finds a matching historical figure using the Gemini API.
+    This endpoint takes a user's phrase and finds a matching historical figure,
+    including their birth/death places, coordinates, and family members.
     """
     
-
     model = genai.GenerativeModel('gemini-2.5-flash-lite')
     #model = genai.GenerativeModel('gemini-2.5-pro')
 
     # Constructing the prompt for the Gemini API
     base_prompt = (
         "Based on the following phrase, identify the best-matching historical figure. "
-        "Provide your answer as a JSON object with three keys: 'name', 'reason' and 'image_query'. "
-        "The 'name' should be the historical figure's name, the 'reason' should be a concise, one-sentence explanation "
-        "of why they are a good match for the phrase, and the 'image_query' should be a search query to find an image of the person."
+        "Provide your answer as a JSON object with the following keys: "
+        "'name', 'reason', 'image_query', 'birth_place', 'death_place', 'parents', 'spouse', 'children'. "
+        "The 'name' should be the figure's name. "
+        "The 'reason' should be a concise, one-sentence explanation. "
+        "The 'image_query' should be a search query for an image. "
+        "The 'birth_place' and 'death_place' should be the city and country (e.g., 'Salzburg, Austria'), or 'N/A' if unknown. "
+        "The 'parents' and 'children' fields should be an array of strings with their names. "
+        "The 'spouse' field should be a string with their name(s). "
+        "If any of these family fields are not known or not applicable, return an empty array [] for parents/children, or an empty string \"\" for spouse."
     )
 
     if request.previous_guesses:
@@ -75,8 +89,19 @@ async def find_person(request: PhraseRequest):
         # Parse the JSON string into a Python dictionary
         person_data = json.loads(cleaned_text)
 
-        if "name" not in person_data or "reason" not in person_data or "image_query" not in person_data:
-            raise ValueError("Invalid JSON format from API")
+        # Validate the JSON structure
+        required_keys = ["name", "reason", "image_query", "birth_place", "death_place", "parents", "spouse", "children"]
+        if not all(key in person_data for key in required_keys):
+            raise ValueError("Invalid JSON format from API. Missing required keys.")
+
+        # Geocode the birth and death places
+        if GOOGLE_MAPS_API_KEY:
+            person_data['birth_coords'] = get_coordinates(person_data.get('birth_place'), GOOGLE_MAPS_API_KEY)
+            person_data['death_coords'] = get_coordinates(person_data.get('death_place'), GOOGLE_MAPS_API_KEY)
+        else:
+            person_data['birth_coords'] = None
+            person_data['death_coords'] = None
+            print("Warning: GOOGLE_MAPS_API_KEY not found. Skipping geocoding.")
 
         return person_data
 

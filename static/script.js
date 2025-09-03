@@ -1,3 +1,4 @@
+// DOM Elements
 const phraseInput = document.getElementById('phraseInput');
 const submitBtn = document.getElementById('submitBtn');
 const resultDiv = document.getElementById('result');
@@ -11,31 +12,157 @@ const incorrectBtn = document.getElementById('incorrectBtn');
 const initialMessage = document.getElementById('initialMessage');
 const errorMessage = document.getElementById('errorMessage');
 
-// This will store the current phrase and incorrect guesses for that phrase
+// Location Elements
+const locationInfo = document.getElementById('locationInfo');
+const birthPlaceEl = document.getElementById('birthPlace');
+const deathPlaceEl = document.getElementById('deathPlace');
+const mapEl = document.getElementById('map');
+
+// Family Elements
+const familyInfo = document.getElementById('familyInfo');
+const parentsSection = document.getElementById('parentsSection');
+const parentsList = document.getElementById('parentsList');
+const spouseSection = document.getElementById('spouseSection');
+const spouseList = document.getElementById('spouseList');
+const childrenSection = document.getElementById('childrenSection');
+const childrenList = document.getElementById('childrenList');
+
+
+// API URLs
+const API_URL = 'http://127.0.0.1:8000/find_person';
+const IMAGE_API_URL = 'http://127.0.0.1:8000/get_image';
+const MAPS_API_KEY_URL = 'http://127.0.0.1:8000/get_maps_key';
+
+// App State
 let currentSession = {
     phrase: '',
     incorrectGuesses: []
 };
+let map;
+let googleMapsScriptLoaded = false;
 
-const API_URL = 'http://127.0.0.1:8000/find_person';
-const IMAGE_API_URL = 'http://127.0.0.1:8000/get_image';
+// --- Google Maps Integration ---
 
-// Function to show/hide UI elements
+const loadGoogleMapsScript = async () => {
+    if (googleMapsScriptLoaded) return;
+    try {
+        const response = await fetch(MAPS_API_KEY_URL);
+        if (!response.ok) {
+            throw new Error('Could not fetch Google Maps API key.');
+        }
+        const data = await response.json();
+        const apiKey = data.maps_key;
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+        googleMapsScriptLoaded = true;
+    } catch (error) {
+        console.error("Failed to load Google Maps script:", error);
+    }
+};
+
+const initMap = (birthCoords, deathCoords) => {
+    if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
+        console.error("Google Maps script not loaded yet.");
+        mapEl.innerHTML = '<p class="text-center text-red-500">Map could not be loaded.</p>';
+        return;
+    }
+
+    const mapOptions = {
+        zoom: 2,
+        center: { lat: 20, lng: 0 },
+        mapTypeId: 'terrain'
+    };
+    map = new google.maps.Map(mapEl, mapOptions);
+
+    const bounds = new google.maps.LatLngBounds();
+    let markerCount = 0;
+    let coordsAreIdentical = false;
+
+    if (birthCoords) {
+        const birthMarker = new google.maps.Marker({
+            position: birthCoords,
+            map: map,
+            title: `Birth Place: ${birthPlaceEl.textContent}`
+        });
+        bounds.extend(birthMarker.getPosition());
+        markerCount++;
+    }
+
+    if (deathCoords) {
+        const deathMarker = new google.maps.Marker({
+            position: deathCoords,
+            map: map,
+            title: `Death Place: ${deathPlaceEl.textContent}`
+        });
+        bounds.extend(deathMarker.getPosition());
+        markerCount++;
+    }
+
+    if (birthCoords && deathCoords && 
+        birthCoords.lat === deathCoords.lat && 
+        birthCoords.lng === deathCoords.lng) {
+        coordsAreIdentical = true;
+    }
+
+    if (markerCount > 1 && !coordsAreIdentical) {
+        map.fitBounds(bounds);
+    } else if (markerCount > 0) {
+        map.setCenter(bounds.getCenter());
+        map.setZoom(5);
+    }
+};
+
+// --- UI Management ---
+
 const showLoading = () => {
     loader.classList.remove('hidden');
     personInfo.classList.add('hidden');
+    locationInfo.classList.add('hidden');
+    familyInfo.classList.add('hidden');
     initialMessage.classList.add('hidden');
     errorMessage.classList.add('hidden');
     submitBtn.disabled = true;
     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 };
 
-const showResult = (name, reason, imageUrl) => {
-    personName.textContent = name;
-    personReason.textContent = reason;
-    personImage.src = imageUrl;
-    loader.classList.add('hidden');
+const showResult = (data) => {
+    // Set basic info
+    personName.textContent = data.name;
+    personReason.textContent = data.reason;
     personInfo.classList.remove('hidden');
+
+    // Set location text content and map
+    birthPlaceEl.textContent = data.birth_place || 'N/A';
+    deathPlaceEl.textContent = data.death_place || 'N/A';
+    if (data.birth_coords || data.death_coords) {
+        locationInfo.classList.remove('hidden');
+        initMap(data.birth_coords, data.death_coords);
+    }
+
+    // Handle Family Info
+    familyInfo.classList.remove('hidden'); // Show the main family container
+    // Parents
+    if (data.parents && data.parents.length > 0) {
+        parentsList.textContent = data.parents.join(', ');
+        parentsSection.classList.remove('hidden');
+    }
+    // Spouse
+    if (data.spouse && data.spouse.toLowerCase() !== 'n/a' && data.spouse !== '') {
+        spouseList.textContent = data.spouse;
+        spouseSection.classList.remove('hidden');
+    }
+    // Children
+    if (data.children && data.children.length > 0) {
+        childrenList.textContent = data.children.join(', ');
+        childrenSection.classList.remove('hidden');
+    }
+
+
+    loader.classList.add('hidden');
     submitBtn.disabled = false;
     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 };
@@ -46,17 +173,25 @@ const showError = (message) => {
     errorMessage.classList.remove('hidden');
     submitBtn.disabled = false;
     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-}
+};
 
 const resetUI = () => {
     loader.classList.add('hidden');
     personInfo.classList.add('hidden');
+    locationInfo.classList.add('hidden');
+    // Hide all family sections individually
+    familyInfo.classList.add('hidden');
+    parentsSection.classList.add('hidden');
+    spouseSection.classList.add('hidden');
+    childrenSection.classList.add('hidden');
     errorMessage.classList.add('hidden');
     initialMessage.classList.remove('hidden');
     phraseInput.value = '';
     submitBtn.disabled = false;
     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-}
+};
+
+// --- API Calls & Logic ---
 
 const findPerson = async () => {
     const userPhrase = phraseInput.value.trim();
@@ -65,7 +200,6 @@ const findPerson = async () => {
         return;
     }
 
-    // If it's a new phrase, reset the session
     if (userPhrase !== currentSession.phrase) {
         currentSession.phrase = userPhrase;
         currentSession.incorrectGuesses = [];
@@ -74,31 +208,31 @@ const findPerson = async () => {
     showLoading();
 
     try {
-        const response = await fetch(API_URL, {
+        const personResponse = await fetch(API_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 phrase: currentSession.phrase,
                 previous_guesses: currentSession.incorrectGuesses
             }),
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        if (!personResponse.ok) {
+            const errorData = await personResponse.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${personResponse.status}`);
         }
+        const personData = await personResponse.json();
 
-        const data = await response.json();
-
-        const imageResponse = await fetch(`${IMAGE_API_URL}?query=${encodeURIComponent(data.image_query)}`);
+        const imageResponse = await fetch(`${IMAGE_API_URL}?query=${encodeURIComponent(personData.image_query)}`);
         if (!imageResponse.ok) {
-            throw new Error('Could not fetch image.');
+            console.error('Could not fetch image.');
+            personImage.src = '';
+        } else {
+            const imageData = await imageResponse.json();
+            personImage.src = imageData.image_url;
         }
-        const imageData = await imageResponse.json();
 
-        showResult(data.name, data.reason, imageData.image_url);
+        showResult(personData);
 
     } catch (error) {
         console.error('Fetch error:', error);
@@ -106,15 +240,14 @@ const findPerson = async () => {
     }
 };
 
+// --- Event Listeners & Initialization ---
+
 submitBtn.addEventListener('click', findPerson);
 phraseInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        findPerson();
-    }
+    if (event.key === 'Enter') findPerson();
 });
 
 correctBtn.addEventListener('click', () => {
-    // Using a custom modal/alert in the future would be better than window.alert
     resetUI();
     currentSession = { phrase: '', incorrectGuesses: [] };
 });
@@ -124,6 +257,9 @@ incorrectBtn.addEventListener('click', () => {
     if (currentGuess && !currentSession.incorrectGuesses.includes(currentGuess)) {
         currentSession.incorrectGuesses.push(currentGuess);
     }
-    // Try to find a new person with the updated list of incorrect guesses
     findPerson();
 });
+
+// Initial setup
+resetUI();
+loadGoogleMapsScript();
