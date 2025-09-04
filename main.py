@@ -26,8 +26,9 @@ if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
     genai.configure(api_key=GEMINI_API_KEY)
 
 # --- Pydantic Models for Request Bodies ---
-class PhraseRequest(BaseModel):
-    phrase: str
+class PersonRequest(BaseModel):
+    subject: str
+    context: str | None = None
     previous_guesses: list[str] = []
 
 # --- FastAPI App Initialization ---
@@ -51,24 +52,35 @@ async def get_maps_key():
     return {"maps_key": GOOGLE_MAPS_API_KEY}
 
 @app.post("/find_person")
-async def find_person(request: PhraseRequest):
+async def find_person(request: PersonRequest):
     """
-    This endpoint takes a user's phrase and guesses a matching historical figure.
+    This endpoint takes a subject and optional context and guesses a matching historical figure.
     It returns only the name and the reason for the guess.
     """
     model = genai.GenerativeModel('gemini-2.5-flash-lite')
     
-    base_prompt = (
-        "Based on the following phrase, identify the best-matching historical figure. "
-        "Provide your answer as a JSON object with two keys: 'name' and 'reason'. "
-        "The 'name' should be the historical figure's name. "
-        "The 'reason' should be a concise, one-sentence explanation of why they are a good match for the phrase."
+    # Construct the prompt with explicit subject and context
+    if request.context:
+        base_prompt = (
+            f"Identify the historical figure with the name '{request.subject}'. "
+            f"Use the following context for disambiguation: '{request.context}'. "
+            "The person to identify is always the one in the 'subject' field."
+        )
+    else:
+        # This handles generic queries like "I have a dream" where the subject is the whole phrase
+        base_prompt = f"Based on the following phrase, identify the best-matching historical figure: '{request.subject}'."
+
+    # Add instructions for the output format
+    base_prompt += (
+        " Provide your answer as a JSON object with two keys: 'name' and 'reason'. "
+        "The 'name' should be the figure's full, correct name. "
+        "The 'reason' should be a concise, one-sentence explanation of why they are famous or relevant to the query."
     )
 
     if request.previous_guesses:
         base_prompt += f"\n\nAvoid suggesting the following people: {', '.join(request.previous_guesses)}."
 
-    prompt = f"{base_prompt}\n\nPhrase: \"{request.phrase}\""
+    prompt = base_prompt # The prompt is now fully constructed
 
     try:
         response = model.generate_content(prompt)

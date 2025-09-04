@@ -32,7 +32,7 @@ const siblingsList = document.getElementById('siblingsList');
 
 // API URLs
 const GUESS_API_URL = 'http://127.0.0.1:8000/find_person';
-const PERSON_API_URL = 'http://127.0.0.1:8000/person/'; // e.g. /person/Martin Luther King Jr.
+const PERSON_API_URL = 'http://127.0.0.1:8000/person/';
 const IMAGE_API_URL = 'http://127.0.0.1:8000/get_image';
 const MAPS_API_KEY_URL = 'http://127.0.0.1:8000/get_maps_key';
 
@@ -120,6 +120,30 @@ const showLoading = () => {
     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 };
 
+// Helper function to create clickable links for family members
+const createAndAppendLink = (container, name, relationship, currentPersonName, previousPhrase) => {
+    const link = document.createElement('a');
+    link.textContent = name;
+    link.href = '#';
+    link.classList.add('text-blue-500', 'hover:underline', 'cursor-pointer');
+    
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        let newPhrase;
+        // Check if the previous search was already a contextual one.
+        if (previousPhrase.toLowerCase().includes(' of ')) {
+            newPhrase = `${name}, ${relationship} of ${previousPhrase}`;
+        } else {
+            // This is the first click, so the context is just the current person's name.
+            newPhrase = `${name}, ${relationship} of ${currentPersonName}`;
+        }
+        phraseInput.value = newPhrase;
+        startGuessingProcess();
+    });
+
+    container.appendChild(link);
+};
+
 const showResult = (data) => {
     // Set basic info
     personName.textContent = data.name;
@@ -135,26 +159,60 @@ const showResult = (data) => {
     }
 
     // Handle Family Info
+    const currentPersonName = data.name;
+    const previousPhrase = phraseInput.value;
     familyInfo.classList.remove('hidden');
-    parentsSection.classList.add('hidden'); // Hide by default, show if data exists
+    parentsSection.classList.add('hidden');
     spouseSection.classList.add('hidden');
     childrenSection.classList.add('hidden');
     siblingsSection.classList.add('hidden');
 
+    // Parents
     if (data.parents && data.parents.length > 0) {
-        parentsList.textContent = data.parents.join(', ');
+        parentsList.innerHTML = '';
+        data.parents.forEach((name, index) => {
+            createAndAppendLink(parentsList, name, 'parent', currentPersonName, previousPhrase);
+            if (index < data.parents.length - 1) {
+                parentsList.appendChild(document.createTextNode(', '));
+            }
+        });
         parentsSection.classList.remove('hidden');
     }
+
+    // Spouse
     if (data.spouse && data.spouse.toLowerCase() !== 'n/a' && data.spouse !== '') {
-        spouseList.textContent = data.spouse;
+        spouseList.innerHTML = '';
+        const spouses = data.spouse.split(', ');
+        spouses.forEach((name, index) => {
+            createAndAppendLink(spouseList, name, 'spouse', currentPersonName, previousPhrase);
+            if (index < spouses.length - 1) {
+                spouseList.appendChild(document.createTextNode(', '));
+            }
+        });
         spouseSection.classList.remove('hidden');
     }
+
+    // Children
     if (data.children && data.children.length > 0) {
-        childrenList.textContent = data.children.join(', ');
+        childrenList.innerHTML = '';
+        data.children.forEach((name, index) => {
+            createAndAppendLink(childrenList, name, 'child', currentPersonName, previousPhrase);
+            if (index < data.children.length - 1) {
+                childrenList.appendChild(document.createTextNode(', '));
+            }
+        });
         childrenSection.classList.remove('hidden');
     }
+
+    // Siblings
     if (data.siblings && data.siblings.length > 0) {
-        siblingsList.textContent = data.siblings.join(', ');
+        siblingsList.innerHTML = '';
+        data.siblings.forEach((name, index) => {
+            createAndAppendLink(siblingsList, name, 'sibling', currentPersonName, previousPhrase);
+            if (index < data.siblings.length - 1) {
+                siblingsList.appendChild(document.createTextNode(', '));
+            }
+        });
         siblingsSection.classList.remove('hidden');
     }
 
@@ -191,16 +249,15 @@ const resetUI = () => {
 
 const getAndShowPersonDetails = async (name, reason) => {
     try {
-        // 2. Fetch all details for the guessed person
         const detailsResponse = await fetch(`${PERSON_API_URL}${encodeURIComponent(name)}`);
         if (!detailsResponse.ok) {
             const errorData = await detailsResponse.json();
             throw new Error(errorData.detail || `Could not fetch details for ${name}.`);
         }
         const personData = await detailsResponse.json();
-        personData.reason = reason; // Add the reason from the guessing step
+        
+        personData.reason = reason;
 
-        // 3. Fetch the image
         const imageResponse = await fetch(`${IMAGE_API_URL}?query=${encodeURIComponent(personData.image_query)}`);
         if (!imageResponse.ok) {
             console.error('Could not fetch image.');
@@ -210,7 +267,6 @@ const getAndShowPersonDetails = async (name, reason) => {
             personImage.src = imageData.image_url;
         }
 
-        // 4. Display all results
         showResult(personData);
 
     } catch (error) {
@@ -235,23 +291,42 @@ const startGuessingProcess = async () => {
     showLoading();
 
     try {
-        // 1. Guess the person from the phrase
+        // Parse the phrase into subject and context
+        let subject;
+        let context = null;
+        const commaIndex = userPhrase.indexOf(',');
+        
+        if (commaIndex !== -1) {
+            subject = userPhrase.substring(0, commaIndex).trim();
+            context = userPhrase.substring(commaIndex + 1).trim();
+        } else {
+            subject = userPhrase;
+        }
+
+        const requestBody = {
+            subject: subject,
+            context: context,
+            previous_guesses: currentSession.incorrectGuesses
+        };
+
         const guessResponse = await fetch(GUESS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                phrase: currentSession.phrase,
-                previous_guesses: currentSession.incorrectGuesses
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!guessResponse.ok) {
             const errorData = await guessResponse.json();
+            // FastAPI validation errors are in a 'detail' array. Let's format them.
+            if (errorData.detail && Array.isArray(errorData.detail)) {
+                const errorMsg = errorData.detail.map(d => `${d.loc.join('.')} - ${d.msg}`).join('; ');
+                throw new Error(errorMsg);
+            }
+            // Fallback for other types of errors
             throw new Error(errorData.detail || 'Failed to get a guess.');
         }
         const guessData = await guessResponse.json();
 
-        // 2. Get and display the full details for the guessed person
         await getAndShowPersonDetails(guessData.name, guessData.reason);
 
     } catch (error) {
@@ -277,7 +352,7 @@ incorrectBtn.addEventListener('click', () => {
     if (currentGuess && !currentSession.incorrectGuesses.includes(currentGuess)) {
         currentSession.incorrectGuesses.push(currentGuess);
     }
-    startGuessingProcess(); // Start the process again with the new incorrect guess
+    startGuessingProcess();
 });
 
 // Initial setup
