@@ -21,6 +21,7 @@ def get_person_details(name: str) -> dict | None:
 
     try:
         response = model.generate_content(prompt)
+        print("Gemini response for", name, ":", response.text)
         cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
         print(cleaned_text)
         person_data = json.loads(cleaned_text)

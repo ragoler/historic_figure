@@ -1,0 +1,33 @@
+<h1>WHO AM I THINKING OF?</h1>
+
+<p>Enter a phrase, and I'll guess the historical figure you have in mind.</p>
+
+<input type="text" id="userInput" placeholder="e.g., first US president">
+<button id="findFigureBtn">Find Figure</button>
+
+<h2 id="guess">Is it...</h2>
+<div id="figureDetails">
+    <p id="figureName"></p>
+    <div id="family" style="display: none;">
+        <p id="parentsTitle"><strong>PARENTS</strong></p>
+        <ul id="parents"></ul>
+        <p id="spouseTitle"><strong>SPOUSE</strong></p>
+        <ul id="spouse"></ul>
+        <p id="childrenTitle"><strong>CHILDREN</strong></p>
+        <ul id="children"></ul>
+        <p id="siblingsTitle"><strong>SIBLINGS</strong></p>
+        <ul id="siblings"></ul>
+    </div>
+    <div id="location">
+        <p id="birthPlaceTitle"><strong>BIRTH PLACE</strong></p>
+        <p id="birthPlace"></p>
+        <p id="deathPlaceTitle"><strong>DEATH PLACE</strong></p>
+        <p id="deathPlace"></p>
+        <div id="map" style="height: 300px;"></div>
+    </div>
+</div>
+
+<button id="correctBtn" style="display: none;">Correct!</button>
+<button id="incorrectBtn" style="display: none;">Incorrect</button>
+
+<div id="result">Your historical figure will appear here.</div>
