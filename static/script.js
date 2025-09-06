@@ -37,8 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
     loadGame(window.location.pathname);
 });
 
-
-class WhoAmIGame {
+function init_who_am_i() {
+    class WhoAmIGame {
     constructor() {
         this.userInput = document.getElementById('userInput');
         this.findFigureBtn = document.getElementById('findFigureBtn');
@@ -58,19 +58,28 @@ class WhoAmIGame {
         this.GUESS_API_URL = '/who_am_i/find_person';
         this.PERSON_API_URL = '/who_am_i/person/';
         this.MAPS_API_KEY_URL = '/who_am_i/get_maps_key';
+        this.INCORRECT_GUESS_URL = '/who_am_i/incorrect_guess';
 
-        this.currentSession = {
-            phrase: '',
-            incorrectGuesses: []
-        };
-
-        this.googleMapsScriptLoaded = false;
+        this.sessionId = this.generateSessionId();
 
         this.findFigureBtn.addEventListener('click', () => this.findFigure());
         this.correctBtn.addEventListener('click', () => this.handleResponse(true));
         this.incorrectBtn.addEventListener('click', () => this.handleResponse(false));
+        this.userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                this.findFigure();
+            }
+        });
         this.loadGoogleMapsScript();
         this.resetUI();
+    }
+
+    generateSessionId() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     }
 
     resetUI() {
@@ -88,49 +97,62 @@ class WhoAmIGame {
             return;
         }
 
-        if (userPhrase !== this.currentSession.phrase) {
-            this.currentSession.phrase = userPhrase;
-            this.currentSession.incorrectGuesses = [];
+        let subject;
+        let context = null;
+        const commaIndex = userPhrase.indexOf(',');
+        
+        if (commaIndex !== -1) {
+            subject = userPhrase.substring(0, commaIndex).trim();
+            context = userPhrase.substring(commaIndex + 1).trim();
+        } else {
+            subject = userPhrase;
         }
 
         try {
             const requestBody = {
-                subject: userPhrase,
-                previous_guesses: this.currentSession.incorrectGuesses
+                subject: subject,
+                context: context,
+                session_id: this.sessionId
             };
 
-            const response = await fetch(this.GUESS_API_URL, {
+            const guessData = await this.fetchData(this.GUESS_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to get a guess.');
+            if (guessData) {
+                await this.getPersonDetails(guessData.name, context);
             }
-
-            const guessData = await response.json();
-            await this.getPersonDetails(guessData.name);
-
         } catch (error) {
             console.error('Error finding figure:', error);
             this.result.textContent = `Error: ${error.message}`;
         }
     }
 
-    async getPersonDetails(name) {
+    async fetchData(url, options) {
         try {
-            const response = await fetch(`${this.PERSON_API_URL}${name}`);
+            const response = await fetch(url, options);
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || `Could not fetch details for ${name}.`);
+                throw new Error(errorData.detail || 'Failed to fetch data.');
             }
-            const personData = await response.json();
-            this.displayPersonDetails(personData);
+            return await response.json();
         } catch (error) {
-            console.error('Error getting person details:', error);
+            console.error('Error fetching data:', error);
             this.result.textContent = `Error: ${error.message}`;
+            return null;
+        }
+    }
+
+    async getPersonDetails(name, context) {
+        let url = `${this.PERSON_API_URL}${name}?session_id=${this.sessionId}`;
+        if (context) {
+            url += `&context=${encodeURIComponent(context)}`;
+        }
+        const personData = await this.fetchData(url);
+        if (personData) {
+            this.displayPersonDetails(personData);
         }
     }
 
@@ -271,15 +293,27 @@ class WhoAmIGame {
             this.resetUI();
         } else {
             const currentGuess = this.figureName.textContent;
-            if (currentGuess && !this.currentSession.incorrectGuesses.includes(currentGuess)) {
-                this.currentSession.incorrectGuesses.push(currentGuess);
-            }
+            this.reportIncorrectGuess(currentGuess);
             this.findFigure();
         }
     }
 
+    async reportIncorrectGuess(name) {
+        try {
+            await fetch(this.INCORRECT_GUESS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: this.sessionId, name: name }),
+            });
+        } catch (error) {
+            console.error('Error reporting incorrect guess:', error);
+        }
+    }
+
     async loadGoogleMapsScript() {
-        if (this.googleMapsScriptLoaded) return;
+        if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+            return;
+        }
         try {
             const response = await fetch(this.MAPS_API_KEY_URL);
             if (!response.ok) throw new Error('Could not fetch Google Maps API key.');
@@ -291,7 +325,6 @@ class WhoAmIGame {
             script.async = true;
             script.defer = true;
             document.head.appendChild(script);
-            this.googleMapsScriptLoaded = true;
         } catch (error) {
             console.error("Failed to load Google Maps script:", error);
         }
@@ -340,6 +373,5 @@ class WhoAmIGame {
     }
 }
 
-function init_who_am_i() {
     new WhoAmIGame();
 }

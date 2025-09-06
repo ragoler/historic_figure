@@ -23,11 +23,13 @@ nav a {
     text-align: center;
 }
 
-input[type="text"] {
-    padding: 0.5em;
+textarea {
     width: 60%;
+    padding: 0.5em;
     border: 1px solid #ced4da;
     border-radius: 0.25rem;
+    resize: none;
+    vertical-align: middle;
 }
 
 button {
@@ -38,6 +40,7 @@ button {
     color: #fff;
     background-color: #007bff;
     cursor: pointer;
+    vertical-align: middle;
 }
 
 #correctBtn {
@@ -56,6 +59,12 @@ button {
     padding: 1em;
     border-radius: 5px;
     background-color: #fff;
+}
+
+#figureName {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #007bff;
 }
 
 #family ul {

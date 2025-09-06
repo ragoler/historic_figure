@@ -1,14 +1,14 @@
-import google.generativeai as genai
-import json
+from gemini import generate_json
 
-def get_person_details(name: str) -> dict | None:
+def get_person_details(name: str, context: str | None = None, incorrect_guesses: list[str] | None = None) -> dict | None:
     """
     Fetches detailed information for a given historical figure using the Gemini API.
     """
-    model = genai.GenerativeModel('gemini-2.5-flash-lite')
-
-    prompt = (
-        f"Provide a detailed profile for the historical figure: {name}. "
+    prompt = f"Provide a detailed profile for the historical figure: {name}. "
+    if context:
+        prompt += f"Use the following context for disambiguation: '{context}'. "
+    
+    prompt += (
         "Return the information as a JSON object with the following keys: "
         "'name', 'reason', 'image_query', 'birth_place', 'death_place', 'parents', 'spouse', 'children', 'siblings'.\n"
         "- 'name': The person's full name.\n"
@@ -19,20 +19,18 @@ def get_person_details(name: str) -> dict | None:
         "- 'spouse': A string with the spouse's name. Return an empty string \"\" if unknown or not applicable."
     )
 
-    try:
-        response = model.generate_content(prompt)
-        print("Gemini response for", name, ":", response.text)
-        cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-        print(cleaned_text)
-        person_data = json.loads(cleaned_text)
+    if incorrect_guesses:
+        prompt += f"\n\nAvoid suggesting the following people: {', '.join(incorrect_guesses)}."
 
-        # Validate the JSON structure
-        required_keys = ["name", "reason", "image_query", "birth_place", "death_place", "parents", "spouse", "children", "siblings"]
-        if not all(key in person_data for key in required_keys):
-            print(f"Invalid JSON format from get_person_details for {name}. Missing keys.")
-            return None
+    person_data = generate_json(prompt)
 
-        return person_data
-    except Exception as e:
-        print(f"An error occurred in get_person_details for {name}: {e}")
+    if not person_data:
         return None
+
+    # Validate the JSON structure
+    required_keys = ["name", "reason", "image_query", "birth_place", "death_place", "parents", "spouse", "children", "siblings"]
+    if not all(key in person_data for key in required_keys):
+        print(f"Invalid JSON format from get_person_details for {name}. Missing keys.")
+        return None
+
+    return person_data

@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 import google.generativeai as genai
 import json
@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from maps import get_coordinates
 from person import get_person_details
+from gemini import generate_json
 
 # Try to import API keys from the config file
 try:
@@ -24,9 +25,14 @@ if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
 class PersonRequest(BaseModel):
     subject: str
     context: str | None = None
-    previous_guesses: list[str] = []
+    session_id: str
+
+class IncorrectGuessRequest(BaseModel):
+    session_id: str
+    name: str
 
 router = APIRouter()
+incorrect_guesses = {}
 
 # --- API Endpoints ---
 @router.get("/get_maps_key")
@@ -41,8 +47,11 @@ async def find_person(request: PersonRequest):
     This endpoint takes a subject and optional context and guesses a matching historical figure.
     It returns only the name and the reason for the guess.
     """
-    model = genai.GenerativeModel('gemini-2.5-flash-lite')
-    
+    if request.session_id not in incorrect_guesses:
+        incorrect_guesses[request.session_id] = []
+
+    print("incorrect_guesses:", incorrect_guesses)
+
     # Construct the prompt with explicit subject and context
     if request.context:
         base_prompt = (
@@ -61,32 +70,45 @@ async def find_person(request: PersonRequest):
         "The 'reason' should be a concise, one-sentence explanation of why they are famous or relevant to the query."
     )
 
-    if request.previous_guesses:
-        base_prompt += f"\n\nAvoid suggesting the following people: {', '.join(request.previous_guesses)}."
+    if incorrect_guesses[request.session_id]:
+        base_prompt += f"\n\nAvoid suggesting the following people: {', '.join(incorrect_guesses[request.session_id])}."
 
     prompt = base_prompt # The prompt is now fully constructed
 
-    try:
-        response = model.generate_content(prompt)
-        cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-        person_guess = json.loads(cleaned_text)
+    person_guess = generate_json(prompt)
 
-        if "name" not in person_guess or "reason" not in person_guess:
-            raise ValueError("Invalid JSON format from guessing API.")
-
-        return person_guess
-
-    except Exception as e:
-        print(f"An error occurred while guessing person: {e}")
+    if not person_guess:
         raise HTTPException(status_code=500, detail="Failed to guess a person from the phrase.")
+
+    if "name" not in person_guess or "reason" not in person_guess:
+        raise HTTPException(status_code=500, detail="Invalid JSON format from guessing API.")
+
+    return person_guess
+
+@router.post("/incorrect_guess")
+async def incorrect_guess(request: IncorrectGuessRequest):
+    if request.session_id not in incorrect_guesses:
+        incorrect_guesses[request.session_id] = []
+    
+    if request.name not in incorrect_guesses[request.session_id]:
+        incorrect_guesses[request.session_id].append(request.name)
+        
+    return {"message": "OK"}
 
 
 @router.get("/person/{person_name}")
-async def get_person_data(person_name: str):
+async def get_person_data(person_name: str, request: Request):
     """
     This endpoint retrieves all details for a specific person by name.
     """
-    person_details = get_person_details(person_name)
+    context = request.query_params.get('context')
+    session_id = request.query_params.get('session_id')
+    
+    incorrect_guesses_list = []
+    if session_id and session_id in incorrect_guesses:
+        incorrect_guesses_list = incorrect_guesses[session_id]
+
+    person_details = get_person_details(person_name, context, incorrect_guesses_list)
 
     if not person_details:
         raise HTTPException(status_code=404, detail=f"Could not find details for {person_name}.")
@@ -121,7 +143,7 @@ async def get_image(query: str):
                 try:
                     # Fetch the content of the page
                     headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36)"
                     }
                     response = requests.get(page_url, headers=headers, timeout=5)
                     response.raise_for_status()
